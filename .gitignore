@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Node/Bun
+node_modules/
+bun.lock
+package-lock.json
+
+# MESI runtime state
+.mesi/
+
+# OpenCode local dependency installs
+.opencode/node_modules/
+.opencode/.gitignore
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+
+# Local agent/editor configuration
+.claude/settings.local.json
+
+# OS/editor noise
+.DS_Store
+*.swp

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mesi-runtime"
+version = "0.1.0"
+description = "Materialized workspace runtime for Context-MESI experiments"
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=9",
+]
+
+[project.scripts]
+mesi = "mesi_runtime.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
