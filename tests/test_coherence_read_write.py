@@ -70,6 +70,23 @@ def test_existing_stale_notice_tracks_latest_head(runtime):
     assert runtime.stale("A")["stale"] == []
 
 
+def test_existing_file_write_requires_current_read(runtime):
+    with pytest.raises(Conflict):
+        runtime.write("B", "README.md", "without read\n")
+
+    events = runtime.events()
+    assert events[-1]["type"] == "write_blocked"
+    assert events[-1]["path"] == "README.md"
+    assert events[-1]["reason"] == "must_read_current"
+
+    runtime.read("A", "README.md")
+    runtime.read("B", "README.md")
+    result = runtime.write("B", "README.md", "after read\n")
+
+    assert result["ok"] is True
+    assert runtime.stale("A")["stale"][0]["path"] == "README.md"
+
+
 def test_new_file_creation_uses_absent_version(runtime):
     first = runtime.write("A", "new.txt", "new\n")
 

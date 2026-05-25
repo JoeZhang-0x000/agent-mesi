@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .constants import DEFAULT_HOST, DEFAULT_PORT, daemon_path
+from .display import shorten_version_fields
 from .errors import MesiError
 from .paths import resolve_project_root
 
@@ -54,4 +55,4 @@ class Client:
 def format_tool_response(result: dict[str, Any]) -> str:
     if "content" in result and result["content"] is not None:
         return str(result["content"])
-    return json.dumps(result, sort_keys=True, indent=2)
+    return json.dumps(shorten_version_fields(result), sort_keys=True, indent=2)

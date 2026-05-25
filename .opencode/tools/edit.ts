@@ -1,6 +1,7 @@
 import { tool } from "@opencode-ai/plugin"
 
 const PYTHON = process.env.MESI_PYTHON ?? "/Users/zhangxin/Desktop/Aeloon-Pro/.venv/bin/python"
+const MESI_RUNTIME_PYTHONPATH = "/Users/zhangxin/Desktop/multi-agents/src"
 
 function projectRoot(directory: string, worktree?: string) {
   const marker = "/.mesi/ws/"
@@ -19,7 +20,12 @@ function agentId(directory: string) {
 async function runMesi(context: any, args: string[]) {
   const root = projectRoot(context.directory, context.worktree)
   const agent = agentId(context.directory)
-  return await Bun.$`env PYTHONPATH=${`${root}/src:${root}`} MESI_PROJECT_ROOT=${root} MESI_AGENT_ID=${agent} ${PYTHON} -m mesi_runtime ${args}`.cwd(context.directory).text()
+  const pythonPath = [MESI_RUNTIME_PYTHONPATH, `${root}/src`, root, process.env.PYTHONPATH ?? ""].filter(Boolean).join(":")
+  const result = await Bun.$`env PYTHONPATH=${pythonPath} MESI_PROJECT_ROOT=${root} MESI_AGENT_ID=${agent} ${PYTHON} -m mesi_runtime ${args}`.cwd(context.directory).quiet().nothrow()
+  const output = `${result.stdout.toString()}${result.stderr.toString()}`
+  if (output.trim()) return output
+  if (result.exitCode !== 0) return `MESI tool failed with exit code ${result.exitCode}`
+  return ""
 }
 
 export default tool({

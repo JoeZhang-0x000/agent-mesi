@@ -240,6 +240,13 @@ class State:
             (agent, path, version),
         )
 
+    def get_read(self, agent: str, path: str, *, conn: sqlite3.Connection) -> str | None:
+        row = conn.execute(
+            "SELECT version FROM read_set WHERE agent_id = ? AND path = ?",
+            (agent, path),
+        ).fetchone()
+        return row["version"] if row else None
+
     def stale_for_agent(self, agent: str, *, conn: sqlite3.Connection | None = None) -> list[dict[str, str]]:
         def _fetch(active_conn: sqlite3.Connection) -> list[dict[str, str]]:
             rows = active_conn.execute(

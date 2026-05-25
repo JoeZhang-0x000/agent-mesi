@@ -92,8 +92,9 @@ def write_daemon_config(project_root: Path, host: str = DEFAULT_HOST, port: int 
 
 def serve(project_root: Path, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
     runtime = Runtime(project_root)
-    write_daemon_config(runtime.project_root, host, port)
     httpd = MesiHTTPServer((host, port), runtime)
+    actual_host, actual_port = httpd.server_address
+    write_daemon_config(runtime.project_root, actual_host, actual_port)
     try:
         httpd.serve_forever()
     finally:

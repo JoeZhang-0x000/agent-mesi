@@ -8,6 +8,8 @@ WORKSPACES_DIR = "ws"
 STATE_FILE = "state.sqlite"
 EVENTS_FILE = "events.jsonl"
 DAEMON_FILE = "daemon.json"
+OPENCODE_BINDINGS_FILE = "opencode-bindings.json"
+LEGACY_OPENCODE_BINDINGS_FILE = "opencode.json"
 ABSENT_VERSION = "absent"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -104,3 +106,11 @@ def events_path(project_root: Path) -> Path:
 
 def daemon_path(project_root: Path) -> Path:
     return mesi_dir(project_root) / DAEMON_FILE
+
+
+def opencode_bindings_path(project_root: Path) -> Path:
+    return mesi_dir(project_root) / OPENCODE_BINDINGS_FILE
+
+
+def legacy_opencode_bindings_path(project_root: Path) -> Path:
+    return mesi_dir(project_root) / LEGACY_OPENCODE_BINDINGS_FILE

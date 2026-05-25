@@ -23,6 +23,8 @@ def test_opencode_tools_are_present_and_call_python():
         assert '@opencode-ai/plugin' in content
         assert 'export default tool' in content
         assert 'MESI_PYTHON' in content
+        assert 'MESI_RUNTIME_PYTHONPATH' in content
+        assert '.quiet().nothrow()' in content
         assert 'python -m mesi_runtime' not in content
         assert '-m' in content and 'mesi_runtime' in content
 

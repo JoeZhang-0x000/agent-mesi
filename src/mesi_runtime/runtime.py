@@ -8,6 +8,7 @@ from typing import Any
 
 from .constants import ABSENT_VERSION, store_dir, workspace_dir
 from .errors import Blocked, Conflict, NotFound, Unsupported
+from .opencode import install_opencode_tools, notify_opencode_stale
 from .paths import (
     copy_file,
     copy_tree_contents,
@@ -36,7 +37,7 @@ class Runtime:
     def init_project(self, source_root: Path | str | None = None) -> dict[str, Any]:
         source = Path(source_root or self.project_root).expanduser().resolve()
         self.project_root.mkdir(parents=True, exist_ok=True)
-        self.store.mkdir(parents=True, exist_ok=True)
+        installed_tools = install_opencode_tools(self.project_root)
         self.state.reset()
 
         if self.store.exists():
@@ -45,13 +46,20 @@ class Runtime:
 
         for rel_path in iter_managed_files(source):
             copy_file(source, self.store, rel_path)
+        if source != self.project_root:
+            for rel_path in installed_tools:
+                copy_file(self.project_root, self.store, rel_path)
 
         with self.state._lock, self.state.connect() as conn:
             heads = snapshot(self.store)
             for rel_path, version in heads.items():
                 self.state.upsert_head(rel_path, version, conn=conn)
-            event = self.state.emit("init", metadata={"files": len(heads)}, conn=conn)
-        return {"ok": True, "files": len(heads), "event": event}
+            event = self.state.emit(
+                "init",
+                metadata={"files": len(heads), "opencode_tools": installed_tools},
+                conn=conn,
+            )
+        return {"ok": True, "files": len(heads), "opencode_tools": installed_tools, "event": event}
 
     def create_agent(self, agent: str) -> dict[str, Any]:
         self._validate_agent(agent)
@@ -131,7 +139,7 @@ class Runtime:
                 metadata={"kind": kind},
                 conn=conn,
             )
-            stale_agents = self.state.mark_stale_readers(
+            stale_agents = self._mark_stale_readers(
                 writer=agent,
                 path=rel,
                 old_version=old,
@@ -256,6 +264,28 @@ class Runtime:
                 conn.execute("DELETE FROM bash_snapshots WHERE snapshot_id = ?", (snapshot_id,))
                 return {"ok": False, "changed": changed, "reason": "workspace_base_mismatch", "conflicts": conflicts, "event": event}
 
+            read_conflicts = [
+                conflict
+                for conflict in (self._read_current_conflict(agent, rel, conn=conn) for rel in changed)
+                if conflict is not None
+            ]
+            if read_conflicts:
+                event = self.state.emit(
+                    "observed_write_blocked",
+                    agent=agent,
+                    reason="must_read_current",
+                    metadata={"conflicts": read_conflicts, "snapshot_id": snapshot_id},
+                    conn=conn,
+                )
+                conn.execute("DELETE FROM bash_snapshots WHERE snapshot_id = ?", (snapshot_id,))
+                return {
+                    "ok": False,
+                    "changed": changed,
+                    "reason": "must_read_current",
+                    "conflicts": read_conflicts,
+                    "event": event,
+                }
+
             committed = []
             stale_agents: dict[str, list[str]] = {}
             for rel in changed:
@@ -277,7 +307,7 @@ class Runtime:
                     metadata={"kind": "bash", "snapshot_id": snapshot_id},
                     conn=conn,
                 )
-                stale_agents[rel] = self.state.mark_stale_readers(
+                stale_agents[rel] = self._mark_stale_readers(
                     writer=agent,
                     path=rel,
                     old_version=old,
@@ -324,6 +354,62 @@ class Runtime:
             )
             conn.commit()
             raise Conflict(f"Workspace base mismatch for {rel}: base={base} head={head}")
+        read_conflict = self._read_current_conflict(agent, rel, conn=conn)
+        if read_conflict is not None:
+            self.state.emit(
+                "write_blocked",
+                agent=agent,
+                path=rel,
+                reason="must_read_current",
+                metadata=read_conflict,
+                conn=conn,
+            )
+            conn.commit()
+            read_version = read_conflict["read"] or "none"
+            raise Conflict(
+                f"must_read_current for {rel}: read={read_version} head={head}. "
+                f"Run mesi_read {rel} before writing."
+            )
+
+    def _read_current_conflict(self, agent: str, rel: str, *, conn) -> dict[str, str | None] | None:
+        head = self.state.get_head(rel, conn=conn)
+        if head == ABSENT_VERSION:
+            return None
+        read_version = self.state.get_read(agent, rel, conn=conn)
+        if read_version == head:
+            return None
+        return {"path": rel, "read": read_version, "head": head}
+
+    def _mark_stale_readers(
+        self,
+        *,
+        writer: str,
+        path: str,
+        old_version: str,
+        new_version: str,
+        conn,
+    ) -> list[str]:
+        stale_agents = self.state.mark_stale_readers(
+            writer=writer,
+            path=path,
+            old_version=old_version,
+            new_version=new_version,
+            conn=conn,
+        )
+        for stale_agent in stale_agents:
+            result = notify_opencode_stale(self.project_root, stale_agent, path, old_version, new_version)
+            event_type = "opencode_notify" if result.get("ok") else "opencode_notify_failed"
+            self.state.emit(
+                event_type,
+                agent=stale_agent,
+                path=path,
+                old_version=old_version,
+                new_version=new_version,
+                reason=result.get("reason"),
+                metadata=result,
+                conn=conn,
+            )
+        return stale_agents
 
     def _ensure_agent_exists(self, agent: str, *, conn) -> None:
         if not self.state.agent_exists(agent, conn=conn):
